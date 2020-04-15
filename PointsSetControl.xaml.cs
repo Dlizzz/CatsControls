@@ -12,7 +12,7 @@ using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.UI;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using Windows.ApplicationModel.Resources;
-using CatsHelpers;
+using CatsHelpers.ColorMaps;
 using System.ComponentModel;
 
 // Pour en savoir plus sur le modèle d'élément Contrôle utilisateur, consultez la page https://go.microsoft.com/fwlink/?LinkId=234236
@@ -37,7 +37,7 @@ namespace CatsControls
         private Point center;
         private Size size;
         private int pointsCount;
-        private ColorsCollection _colorScale;
+        private ColorMap _colorScale;
         private IPointsSet _pointsSet;
 
         private readonly ArrayPool<Color> colorArrayPool;
@@ -99,7 +99,7 @@ namespace CatsControls
         #endregion
 
         #region UserControl Methods
-        public void SetColorScale(ColorsCollection colorScale)
+        public void SetColorScale(ColorMap colorScale)
         {
             _colorScale = colorScale ?? throw new ArgumentNullException(nameof(colorScale));
 
@@ -143,7 +143,7 @@ namespace CatsControls
                 Parallel.For(0, pointsCount, (index) =>
                     renderPixels[index] = (renderValues[index] == 0)
                     ? ColorsCollection.Transparent
-                    : _colorScale.ScaleToColorInverse(renderValues[index]));
+                    : _colorScale.GetInterpolatedColor(renderValues[index]));
             }
 
             renderTarget.SetPixelColors(renderPixels);
