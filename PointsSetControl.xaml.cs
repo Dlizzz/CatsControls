@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Buffers;
 using System.Numerics;
+using System.ComponentModel;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.UI;
@@ -13,7 +15,6 @@ using Microsoft.Graphics.Canvas.UI;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using Windows.ApplicationModel.Resources;
 using CatsHelpers.ColorMaps;
-using System.ComponentModel;
 
 // Pour en savoir plus sur le modèle d'élément Contrôle utilisateur, consultez la page https://go.microsoft.com/fwlink/?LinkId=234236
 
@@ -21,7 +22,8 @@ namespace CatsControls
 {
     public interface IPointsSet
     {
-        double PointSetWorker(Complex c);
+        int PointSetWorker(double ca, double cb);
+        int MaxValue { get; set; }
     }
 
     public sealed partial class PointsSetControl : UserControl, IDisposable
@@ -32,31 +34,29 @@ namespace CatsControls
 
         #region UserControl Initialization
         private Point _origin;
-        private double _scale;
+        // Scale can't be zero
+        private double _scale = 1;
         private double width, height;
         private Point center;
         private Size size;
         private int pointsCount;
-        private ColorMap _colorScale;
         private IPointsSet _pointsSet;
+        private (int, int) minMaxValues;
 
-        private readonly ArrayPool<Color> colorArrayPool;
+        private ColorMap _colorMap;
+        private Color[] indexedColorMap;
+
+        private readonly ArrayPool<Color> colorArrayPool = ArrayPool<Color>.Shared;
         private Color[] renderPixels;
 
-        private readonly ArrayPool<double> doubleArrayPool;
-        private double[] renderValues;
+        private readonly ArrayPool<int> doubleArrayPool = ArrayPool<int>.Shared;
+        private int[] renderValues;
 
         private CanvasRenderTarget renderTarget;
 
         public PointsSetControl()
         {
             InitializeComponent();
-
-            colorArrayPool = ArrayPool<Color>.Shared;
-            doubleArrayPool = ArrayPool<double>.Shared;
-
-            // Scale can't be zero
-            _scale = 1;
         }
         #endregion
           
@@ -99,9 +99,11 @@ namespace CatsControls
         #endregion
 
         #region UserControl Methods
-        public void SetColorScale(ColorMap colorScale)
+        public void SetColorMap(ColorMap colorMap)
         {
-            _colorScale = colorScale ?? throw new ArgumentNullException(nameof(colorScale));
+            _colorMap = colorMap ?? throw new ArgumentNullException(nameof(colorMap));
+
+            if (_pointsSet != null) indexedColorMap = _colorMap.CreateIndexedColorsColorMap(_pointsSet.MaxValue + 1);
 
             Render();
             Canvas.Invalidate();
@@ -110,6 +112,8 @@ namespace CatsControls
         public void SetWorker(IPointsSet pointsSet)
         {
             _pointsSet = pointsSet ?? throw new ArgumentNullException(nameof(pointsSet));
+
+            if (_colorMap != null) indexedColorMap = _colorMap.CreateIndexedColorsColorMap(_pointsSet.MaxValue + 1);
 
             Calculate();
             Render();
@@ -120,47 +124,81 @@ namespace CatsControls
         #region UserControl Logic
         private void Calculate()
         {
-            if (Canvas.ReadyToDraw && _pointsSet != null) Parallel.For(0, pointsCount, Worker);
+            minMaxValues = (0, 0);
+            
+            if (Canvas.ReadyToDraw && _pointsSet != null) Parallel.For(0, pointsCount, () => (0, 0), Worker, Finally);
         }
 
-        private void Worker(int index)
+        private (int, int) Worker(int index, ParallelLoopState loopState, (int, int) minMax)
         {
-            Complex c = ToComplex(index);
+            var (ca, cb) = ToComplex(index);
+            var (min, max) = minMax;
 
-            renderValues[index] = _pointsSet.PointSetWorker(c);
+            renderValues[index] = _pointsSet.PointSetWorker(ca, cb);
+
+            if (renderValues[index] < min) min = renderValues[index];
+            else if (renderValues[index] > max) max = renderValues[index];
+
+            return (min, max);
+        }
+
+        private void Finally((int, int) minMax)
+        {
+            bool redo;
+            var (min, max) = minMax;
+
+            redo = false;
+            do
+            {
+                //Store copy of minMaxValues
+                var refMin = minMaxValues.Item1;
+                if (min < refMin) redo = Interlocked.CompareExchange(ref minMaxValues.Item1, min, refMin) != refMin;
+            }
+            while (redo);
+
+            //redo = false;
+            //do
+            //{
+            //    //Store copy of minMaxValues
+            //    var refMax = minMaxValues.Item2;
+            //    if (max > refMax) redo = Interlocked.CompareExchange(ref minMaxValues.Item2, max, refMax) != refMax;
+            //}
+            //while (redo);
         }
 
         private void Render()
         {
-            if (!Canvas.ReadyToDraw || renderPixels == null || renderValues == null) return;
+            if (!Canvas.ReadyToDraw 
+                || renderPixels == null 
+                || renderValues == null 
+                || _pointsSet == null ) return;
 
-            if (_colorScale == null)
+            if (_colorMap == null)
             {
-                Parallel.For(0, pointsCount, (index) => renderPixels[index] = ColorsCollection.Transparent);
+                using CanvasDrawingSession drawingSession = renderTarget.CreateDrawingSession();
+                drawingSession.Clear(ColorsCollection.Transparent);
             }
             else
             {
                 Parallel.For(0, pointsCount, (index) =>
-                    renderPixels[index] = (renderValues[index] == 0)
+                    renderPixels[index] = (renderValues[index] == _pointsSet.MaxValue)
                     ? ColorsCollection.Transparent
-                    : _colorScale.GetInterpolatedColor(renderValues[index]));
+                    : indexedColorMap[renderValues[index]]);
             }
 
             renderTarget.SetPixelColors(renderPixels);
         }
 
-        private Complex ToComplex(Vector2 point) => new Complex(_scale * (point.X - _origin.X), -_scale * (point.Y - _origin.Y));
+        private (double, double) ToComplex(double x, double y) => (_scale * (x - _origin.X), -_scale * (y - _origin.Y));
 
-        private Complex ToComplex(int index)
+        private (double, double) ToComplex(int index)
         {
             // Transform bitmap index (per line, left to right) 
             // to bitmap coordinates (x left to right, y top to bottom, origin top left) 
-            int lineCount = index / Convert.ToInt32(width); // Euclidean division
+            double y = Math.Truncate(index / width); // Euclidean division
+            double x = index - y * width;
 
-            float x = Convert.ToSingle(index - lineCount * width);
-            float y = Convert.ToSingle(lineCount);
-
-            return ToComplex(new Vector2(x, y));
+            return ToComplex(x, y);
         }
 
         private void AllocateRenderTarget()
@@ -193,6 +231,7 @@ namespace CatsControls
 
             // Call PointsSet CreateResources event before entering the pipeline
             CreateResources?.Invoke(sender, args);
+
             Calculate();
             Render();
             Canvas.Invalidate();
