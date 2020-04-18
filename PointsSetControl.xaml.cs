@@ -28,11 +28,11 @@ namespace CatsControls
 
     public sealed partial class PointsSetControl : UserControl, IDisposable
     {
+        #region UserControl Initialization
         private static readonly ResourceLoader resourceLoader = ResourceLoader.GetForCurrentView("CatsControls/ErrorMessages");
         private const int MOUSE_WHEEL = 120;
         private const double wheelMagnifierRatio = 0.1;
 
-        #region UserControl Initialization
         private Point _origin;
         // Scale can't be zero
         private double _scale = 1;
@@ -41,7 +41,6 @@ namespace CatsControls
         private Size size;
         private int pointsCount;
         private IPointsSet _pointsSet;
-        private (int, int) minMaxValues;
 
         private ColorMap _colorMap;
         private Color[] indexedColorMap;
@@ -71,7 +70,6 @@ namespace CatsControls
 
                 Calculate();
                 Render();
-                Canvas.Invalidate();
             }
         }
 
@@ -87,7 +85,6 @@ namespace CatsControls
 
                 Calculate();
                 Render();
-                Canvas.Invalidate();
             }
         }
         #endregion
@@ -105,8 +102,10 @@ namespace CatsControls
 
             if (_pointsSet != null) indexedColorMap = _colorMap.CreateIndexedColorsColorMap(_pointsSet.MaxValue + 1);
 
+            // Add event handler to render the PointsSet when the colormap is inversed
+            _colorMap.PropertyChanged += Colormap_PropertyChanged;
+
             Render();
-            Canvas.Invalidate();
         }
 
         public void SetWorker(IPointsSet pointsSet)
@@ -117,53 +116,21 @@ namespace CatsControls
 
             Calculate();
             Render();
-            Canvas.Invalidate();
         }
         #endregion
 
         #region UserControl Logic
         private void Calculate()
         {
-            minMaxValues = (0, 0);
-            
-            if (Canvas.ReadyToDraw && _pointsSet != null) Parallel.For(0, pointsCount, () => (0, 0), Worker, Finally);
-        }
-
-        private (int, int) Worker(int index, ParallelLoopState loopState, (int, int) minMax)
-        {
-            var (ca, cb) = ToComplex(index);
-            var (min, max) = minMax;
-
-            renderValues[index] = _pointsSet.PointSetWorker(ca, cb);
-
-            if (renderValues[index] < min) min = renderValues[index];
-            else if (renderValues[index] > max) max = renderValues[index];
-
-            return (min, max);
-        }
-
-        private void Finally((int, int) minMax)
-        {
-            bool redo;
-            var (min, max) = minMax;
-
-            redo = false;
-            do
+            if (Canvas.ReadyToDraw && _pointsSet != null)
             {
-                //Store copy of minMaxValues
-                var refMin = minMaxValues.Item1;
-                if (min < refMin) redo = Interlocked.CompareExchange(ref minMaxValues.Item1, min, refMin) != refMin;
+                Parallel.For(0, pointsCount, (index) =>
+                    {
+                        var (ca, cb) = ToComplex(index);
+                        renderValues[index] = _pointsSet.PointSetWorker(ca, cb);
+                    }
+                );
             }
-            while (redo);
-
-            //redo = false;
-            //do
-            //{
-            //    //Store copy of minMaxValues
-            //    var refMax = minMaxValues.Item2;
-            //    if (max > refMax) redo = Interlocked.CompareExchange(ref minMaxValues.Item2, max, refMax) != refMax;
-            //}
-            //while (redo);
         }
 
         private void Render()
@@ -217,6 +184,17 @@ namespace CatsControls
         }
         #endregion
 
+        #region Colormap Events
+        private void Colormap_PropertyChanged(object sender, PropertyChangedEventArgs args)
+        {
+            if (args.PropertyName == nameof(_colorMap.Inversed) && _pointsSet != null)
+            { 
+                indexedColorMap = _colorMap.CreateIndexedColorsColorMap(_pointsSet.MaxValue + 1);
+                Render();
+            }
+        }
+        #endregion
+
         #region Canvas Events
         private void Canvas_CreateResources(CanvasControl sender, CanvasCreateResourcesEventArgs args)
         {
@@ -234,10 +212,14 @@ namespace CatsControls
 
             Calculate();
             Render();
-            Canvas.Invalidate();
         }
 
-        private void Canvas_Draw(CanvasControl sender, CanvasDrawEventArgs args) => args.DrawingSession.DrawImage(renderTarget);
+        private void Canvas_Draw(CanvasControl sender, CanvasDrawEventArgs args)
+        {
+            args.DrawingSession.DrawImage(renderTarget);
+            // Drawing loop -> at 60 fps
+            Canvas.Invalidate();
+        }
 
         private void Canvas_SizeChanged(object sender, SizeChangedEventArgs args)
         {
@@ -252,7 +234,6 @@ namespace CatsControls
                 AllocateRenderTarget();
                 Calculate();
                 Render();
-                Canvas.Invalidate();
             }
         }
 
@@ -266,7 +247,6 @@ namespace CatsControls
 
             Calculate();
             Render();
-            Canvas.Invalidate();
         }
 
         private void Canvas_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs args)
@@ -277,7 +257,6 @@ namespace CatsControls
 
             Calculate();
             Render();
-            Canvas.Invalidate();
         }
 
         private void Canvas_PointerWheelChanged(object sender, PointerRoutedEventArgs args)
@@ -297,7 +276,6 @@ namespace CatsControls
 
             Calculate();
             Render();
-            Canvas.Invalidate();
         }
         #endregion
 
