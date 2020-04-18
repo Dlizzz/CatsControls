@@ -1,8 +1,7 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.Numerics;
 using System.ComponentModel;
-using System.Threading;
 using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.UI;
@@ -15,6 +14,7 @@ using Microsoft.Graphics.Canvas.UI;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using Windows.ApplicationModel.Resources;
 using CatsHelpers.ColorMaps;
+using System.Runtime.InteropServices.WindowsRuntime;
 
 // Pour en savoir plus sur le modèle d'élément Contrôle utilisateur, consultez la page https://go.microsoft.com/fwlink/?LinkId=234236
 
