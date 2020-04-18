@@ -8,11 +8,8 @@
     mc:Ignorable="d"
     d:DesignHeight="450"
     d:DesignWidth="800">
-
-    <Grid x:Name="Grid">
-        <Grid.Background>
-            <Binding x:Name="PointsSet_Background" ElementName="PointsSet" Path="Background"/>
-        </Grid.Background>
+    
+    <Grid x:Name="Grid" ManipulationMode="All" Background="{Binding ElementName=PointsSet, Path=Background}">
         <canvas:CanvasControl x:Name="Canvas" SizeChanged="Canvas_SizeChanged" DoubleTapped="Canvas_DoubleTapped" Draw="Canvas_Draw" ManipulationMode="All" ManipulationDelta="Canvas_ManipulationDelta" PointerWheelChanged="Canvas_PointerWheelChanged" ClearColor="#00000000" CanBeScrollAnchor="True" CreateResources="Canvas_CreateResources"/>
     </Grid>
     

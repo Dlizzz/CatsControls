@@ -8,10 +8,11 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Input;
+using Windows.ApplicationModel.Resources;
+using Windows.Storage.Streams;
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.UI;
 using Microsoft.Graphics.Canvas.UI.Xaml;
-using Windows.ApplicationModel.Resources;
 using CatsHelpers.ColorMaps;
 
 // Pour en savoir plus sur le modèle d'élément Contrôle utilisateur, consultez la page https://go.microsoft.com/fwlink/?LinkId=234236
@@ -54,6 +55,8 @@ namespace CatsControls
         public PointsSetControl()
         {
             InitializeComponent();
+
+            // Configure grid GestureRecognizer
         }
         #endregion
           
@@ -112,6 +115,11 @@ namespace CatsControls
             Calculate();
             Render();
         }
+
+        public async Task SaveImageAsync(IRandomAccessStream stream, CanvasBitmapFileFormat fileFormat)
+        {
+                await renderTarget.SaveAsync(stream, fileFormat);
+        }
         #endregion
 
         #region UserControl Logic
@@ -149,11 +157,11 @@ namespace CatsControls
         {
             if (renderValues[index] == _pointsSet.MaxValue)
             {
-                Buffer.BlockCopy(NamedColorMaps.TransparentBytes, 0, renderPixels, index * BYTES_PER_PIXEL, 4);
+                System.Buffer.BlockCopy(NamedColorMaps.TransparentBytes, 0, renderPixels, index * BYTES_PER_PIXEL, 4);
             }
             else
             {
-                Buffer.BlockCopy(indexedColorMap[renderValues[index]], 0, renderPixels, index * BYTES_PER_PIXEL, 4);
+                System.Buffer.BlockCopy(indexedColorMap[renderValues[index]], 0, renderPixels, index * BYTES_PER_PIXEL, 4);
             }
         }
 
@@ -272,8 +280,8 @@ namespace CatsControls
         {
             PointerPoint pointerPoint = args.GetCurrentPoint(Canvas);
 
-            int magnifierPower = Math.Abs(pointerPoint.Properties.MouseWheelDelta) / MOUSE_WHEEL;
             double magnifier = pointerPoint.Properties.MouseWheelDelta > 0 ? 1 - wheelMagnifierRatio : 1 + wheelMagnifierRatio;
+            int magnifierPower = Math.Abs(pointerPoint.Properties.MouseWheelDelta) / MOUSE_WHEEL;
             for (int i = 2; i <= magnifierPower; i++) magnifier *= magnifier;
 
             // Transalte the origin to have the complex at the center of the canevas staying at the center
