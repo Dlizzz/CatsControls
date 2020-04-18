@@ -4,7 +4,6 @@ using System.Numerics;
 using System.ComponentModel;
 using System.Threading.Tasks;
 using Windows.Foundation;
-using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
@@ -14,7 +13,6 @@ using Microsoft.Graphics.Canvas.UI;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using Windows.ApplicationModel.Resources;
 using CatsHelpers.ColorMaps;
-using System.Runtime.InteropServices.WindowsRuntime;
 
 // Pour en savoir plus sur le modèle d'élément Contrôle utilisateur, consultez la page https://go.microsoft.com/fwlink/?LinkId=234236
 
@@ -31,8 +29,8 @@ namespace CatsControls
         #region UserControl Initialization
         private static readonly ResourceLoader resourceLoader = ResourceLoader.GetForCurrentView("CatsControls/ErrorMessages");
         private const int MOUSE_WHEEL = 120;
+        private const int BYTES_PER_PIXEL = 4;
         private const double wheelMagnifierRatio = 0.1;
-
         private Point _origin;
         // Scale can't be zero
         private double _scale = 1;
@@ -43,10 +41,10 @@ namespace CatsControls
         private IPointsSet _pointsSet;
 
         private ColorMap _colorMap;
-        private Color[] indexedColorMap;
+        private byte[][] indexedColorMap;
 
-        private readonly ArrayPool<Color> colorArrayPool = ArrayPool<Color>.Shared;
-        private Color[] renderPixels;
+        private readonly ArrayPool<byte> colorArrayPool = ArrayPool<byte>.Shared;
+        private byte[] renderPixels;
 
         private readonly ArrayPool<int> doubleArrayPool = ArrayPool<int>.Shared;
         private int[] renderValues;
@@ -99,12 +97,10 @@ namespace CatsControls
         public void SetColorMap(ColorMap colorMap)
         {
             _colorMap = colorMap ?? throw new ArgumentNullException(nameof(colorMap));
-
-            if (_pointsSet != null) indexedColorMap = _colorMap.CreateIndexedColorsColorMap(_pointsSet.MaxValue + 1);
-
             // Add event handler to render the PointsSet when the colormap is inversed
             _colorMap.PropertyChanged += Colormap_PropertyChanged;
 
+            UpdateColorMap();
             Render();
         }
 
@@ -112,8 +108,7 @@ namespace CatsControls
         {
             _pointsSet = pointsSet ?? throw new ArgumentNullException(nameof(pointsSet));
 
-            if (_colorMap != null) indexedColorMap = _colorMap.CreateIndexedColorsColorMap(_pointsSet.MaxValue + 1);
-
+            UpdateColorMap();
             Calculate();
             Render();
         }
@@ -143,17 +138,23 @@ namespace CatsControls
             if (_colorMap == null)
             {
                 using CanvasDrawingSession drawingSession = renderTarget.CreateDrawingSession();
-                drawingSession.Clear(ColorsCollection.Transparent);
+                drawingSession.Clear(NamedColorMaps.TransparentColor);
+            }
+            else Parallel.For(0, pointsCount, RenderWorker);
+
+            renderTarget.SetPixelBytes(renderPixels);
+        }
+
+        private void RenderWorker(int index)
+        {
+            if (renderValues[index] == _pointsSet.MaxValue)
+            {
+                Buffer.BlockCopy(NamedColorMaps.TransparentBytes, 0, renderPixels, index * BYTES_PER_PIXEL, 4);
             }
             else
             {
-                Parallel.For(0, pointsCount, (index) =>
-                    renderPixels[index] = (renderValues[index] == _pointsSet.MaxValue)
-                    ? ColorsCollection.Transparent
-                    : indexedColorMap[renderValues[index]]);
+                Buffer.BlockCopy(indexedColorMap[renderValues[index]], 0, renderPixels, index * BYTES_PER_PIXEL, 4);
             }
-
-            renderTarget.SetPixelColors(renderPixels);
         }
 
         private (double, double) ToComplex(double x, double y) => (_scale * (x - _origin.X), -_scale * (y - _origin.Y));
@@ -176,10 +177,18 @@ namespace CatsControls
                 renderTarget = new CanvasRenderTarget(Canvas, size);
 
                 if (renderPixels != null) colorArrayPool.Return(renderPixels);
-                renderPixels = colorArrayPool.Rent(pointsCount);
+                renderPixels = colorArrayPool.Rent(pointsCount * BYTES_PER_PIXEL);
 
                 if (renderValues != null) doubleArrayPool.Return(renderValues);
                 renderValues = doubleArrayPool.Rent(pointsCount);
+            }
+        }
+
+        private void UpdateColorMap()
+        {
+            if (_pointsSet != null && _colorMap != null)
+            {
+                indexedColorMap = _colorMap.CreateIndexedBytesColorMap(_pointsSet.MaxValue + 1);
             }
         }
         #endregion
@@ -187,9 +196,9 @@ namespace CatsControls
         #region Colormap Events
         private void Colormap_PropertyChanged(object sender, PropertyChangedEventArgs args)
         {
-            if (args.PropertyName == nameof(_colorMap.Inversed) && _pointsSet != null)
-            { 
-                indexedColorMap = _colorMap.CreateIndexedColorsColorMap(_pointsSet.MaxValue + 1);
+            if (args.PropertyName == nameof(_colorMap.Inversed))
+            {
+                UpdateColorMap();
                 Render();
             }
         }
