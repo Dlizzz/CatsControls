@@ -123,10 +123,13 @@
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="IPointsSet.cs" />
+    <Compile Include="PointsSet.cs" />
     <Compile Include="PointsSetControl.xaml.cs">
       <DependentUpon>PointsSetControl.xaml</DependentUpon>
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RenderPipeline.cs" />
     <EmbeddedResource Include="Properties\CatsControls.rd.xml" />
   </ItemGroup>
   <ItemGroup>
@@ -153,6 +156,9 @@
     <PRIResource Include="Strings\en-US\ErrorMessages.resw">
       <SubType>Designer</SubType>
     </PRIResource>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Docs\PointsSetControl Render Pipeline.svg" />
   </ItemGroup>
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>
