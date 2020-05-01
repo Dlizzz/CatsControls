@@ -123,13 +123,16 @@
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="IPointsSet.cs" />
-    <Compile Include="PointsSet.cs" />
-    <Compile Include="PointsSetControl.xaml.cs">
+    <Compile Include="ComplexSlider\ComplexSlider.xaml.cs">
+      <DependentUpon>ComplexSlider.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="PointsSet\IPointsSet.cs" />
+    <Compile Include="PointsSet\PointsSet.cs" />
+    <Compile Include="PointsSet\PointsSetControl.xaml.cs">
       <DependentUpon>PointsSetControl.xaml</DependentUpon>
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="RenderPipeline.cs" />
+    <Compile Include="PointsSet\RenderPipeline.cs" />
     <EmbeddedResource Include="Properties\CatsControls.rd.xml" />
   </ItemGroup>
   <ItemGroup>
@@ -141,7 +144,11 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <Page Include="PointsSetControl.xaml">
+    <Page Include="ComplexSlider\ComplexSlider.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="PointsSet\PointsSetControl.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

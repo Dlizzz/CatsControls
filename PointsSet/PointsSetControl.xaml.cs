@@ -131,8 +131,8 @@ namespace CatsControls
         {
             _colorMap = colorMap ?? throw new ArgumentNullException(nameof(colorMap));
 
-            // Register dependency property callback
-            _colorMap.RegisterPropertyChangedCallback(ColorMap.InversedProperty, InversedDependencyPropertyChangedCallback);
+            // Hook to ColorMap Inversed property changed event
+            _colorMap.PropertyChanged += ColorMapPropertiesChangedEventHandler;
 
             renderPipeline.ColorMap = _colorMap;
         }
@@ -213,7 +213,10 @@ namespace CatsControls
         #endregion
 
         #region Colormap Events
-        public void InversedDependencyPropertyChangedCallback(DependencyObject sender, DependencyProperty dp) => renderPipeline.ColorMap = _colorMap;
+        public void ColorMapPropertiesChangedEventHandler(object sender, PropertyChangedEventArgs args)
+        {
+            if (args.PropertyName == "Inversed") renderPipeline.ColorMap = _colorMap;
+        }
         #endregion
 
         #region Canvas Events
