@@ -141,8 +141,8 @@ namespace CatsControls
         {
             _worker = pointsSet ?? throw new ArgumentNullException(nameof(pointsSet));
 
-            // Register dependency property callback
-            ((PointsSet)_worker).RegisterPropertyChangedCallback(CatsControls.PointsSet.ResolutionProperty, ResolutionDependencyPropertyChangedCallback);
+            // Hook to Worker Resolution property changed event
+            ((PointsSet)_worker).PropertyChanged += WorkerPropertiesChangedEventHandler;
 
             renderPipeline.Worker = _worker;
         }
@@ -209,7 +209,11 @@ namespace CatsControls
         #endregion
 
         #region Worker Events
-        public void ResolutionDependencyPropertyChangedCallback(DependencyObject sender, DependencyProperty dp) => renderPipeline.Worker = _worker;
+        public void WorkerPropertiesChangedEventHandler(object sender, PropertyChangedEventArgs args)
+        {
+            if (args.PropertyName == "Resolution") renderPipeline.Worker = _worker;
+        }
+
         #endregion
 
         #region Colormap Events
