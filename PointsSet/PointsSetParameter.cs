@@ -27,14 +27,17 @@ namespace CatsControls.PointsSet
     {
         private double _value;
 
-        public PointsSetDoubleParameter(double minValue, double maxValue)
+        public PointsSetDoubleParameter(double min, double max, double defaultValue)
         {
-            MaxValue = maxValue;
-            MinValue = minValue;
+            Maximum = max;
+            Minimum = min;
+            Default = defaultValue;
+            _value = defaultValue;
         }
 
-        public double MaxValue { get; }
-        public double MinValue { get; }
+        public double Maximum { get; }
+        public double Minimum { get; }
+        public double Default { get; }
 
         public double Value
         {
@@ -52,38 +55,39 @@ namespace CatsControls.PointsSet
     /// </summary>
     public class PointsSetComplexParameter : PointsSetParameter
     {
-        private double _realValue;
-        private double _imaginaryValue;
+        private double _real;
+        private double _imaginary;
 
-        public PointsSetComplexParameter(Complex minValue, Complex maxValue)
+        public PointsSetComplexParameter(Complex min, Complex max, Complex defaultValue)
         {
-            MaxValue = maxValue;
-            MinValue = minValue;
+            Maximum = max;
+            Minimum = min;
+            Default = defaultValue;
+            _real = defaultValue.Real;
+            _imaginary = defaultValue.Imaginary;
         }
 
-        public Complex MaxValue { get; }
-        public Complex MinValue { get; }
+        public Complex Maximum { get; }
+        public Complex Minimum { get; }
+        public Complex Default { get; }
 
-        public Complex Value
-        {
-            get => new Complex(_realValue, _imaginaryValue);
-        }
+        public Complex Value => new Complex(_real, _imaginary);
 
-        public double RealValue
+        public double Real
         {
-            get => _realValue;
+            get => _real;
             set
             {
-                _realValue = value;
+                _real = value;
                 NotifyPropertyChanged();
             }
         }
-        public double ImaginaryValue
+        public double Imaginary
         {
-            get => _imaginaryValue;
+            get => _imaginary;
             set
             {
-                _imaginaryValue = value;
+                _imaginary = value;
                 NotifyPropertyChanged();
             }
         }

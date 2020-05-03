@@ -72,6 +72,14 @@ namespace CatsControls.PointsSet
         }
         #endregion
 
+        #region  Properties
+        public bool RenderEnabled
+        {
+            get => renderPipeline.IsEnabled;
+            set => renderPipeline.IsEnabled = value;
+        }
+        #endregion
+
         #region Origin dependency property
         private static void OnOriginChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
@@ -237,7 +245,6 @@ namespace CatsControls.PointsSet
             Resolution = 0;
             renderPipeline.IsEnabled = true;
         }
-
         #endregion
 
         #region Control Events
