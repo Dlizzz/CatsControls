@@ -126,11 +126,12 @@
     <Compile Include="ComplexSlider\ComplexSlider.xaml.cs">
       <DependentUpon>ComplexSlider.xaml</DependentUpon>
     </Compile>
-    <Compile Include="PointsSet\IPointsSet.cs" />
-    <Compile Include="PointsSet\PointsSet.cs" />
+    <Compile Include="PointsSet\IPointsSetWorker.cs" />
+    <Compile Include="PointsSet\PointsSetWorker.cs" />
     <Compile Include="PointsSet\PointsSetControl.xaml.cs">
       <DependentUpon>PointsSetControl.xaml</DependentUpon>
     </Compile>
+    <Compile Include="PointsSet\PointsSetParameter.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="PointsSet\RenderPipeline.cs" />
     <EmbeddedResource Include="Properties\CatsControls.rd.xml" />

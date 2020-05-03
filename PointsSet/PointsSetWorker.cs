@@ -1,30 +1,32 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using Windows.UI.Xaml;
 using Windows.ApplicationModel.Resources;
 
-namespace CatsControls
+namespace CatsControls.PointsSet
 {
     /// <summary>
     /// Root class for points sets. A point sets must derive from this class and implement the IPointsSet interface.
     /// It provides the public properties to manage worker threshold between min / max values
     /// </summary>
-    public class PointsSet: INotifyPropertyChanged
+    public class PointsSetWorker : INotifyPropertyChanged
     {
+        // Get resource loader for the application
+        private readonly ResourceLoader resourceLoader = ResourceLoader.GetForCurrentView("ErrorMessages");
         // Backing store for Threshold public property
         protected int _threshold;
         // Backing store for Resolution property
         private double _resolution;
-        // Get resource loader for the application
-        private readonly ResourceLoader resourceLoader = ResourceLoader.GetForCurrentView("ErrorMessages");
+        // backing store for the Parameters list property
+        protected Dictionary<string, PointsSetParameter> _parameters;
 
         /// <summary>
         /// Create a PointsSet with the worker threshold between minimum and maximum value
         /// </summary>
         /// <param name="minThreshold">Minimum value for the threshold"/></param>
         /// <param name="maxThreshold">Maximum value for the threshold"/></param>
-        public PointsSet(int minThreshold, int maxThreshold)
+        public PointsSetWorker(int minThreshold, int maxThreshold)
         {
             // Given values must be strictly greater than zero and max must bet greater than min
             if (minThreshold <= 0) throw new ArgumentOutOfRangeException(nameof(minThreshold), resourceLoader.GetString("ValueNotStrictlyPositive"));
@@ -36,6 +38,9 @@ namespace CatsControls
 
             // Default threshold is minimum
             _threshold = minThreshold;
+
+            // Create parameters list
+            _parameters = new Dictionary<string, PointsSetParameter>();
         }
 
         #region Properties
@@ -53,7 +58,7 @@ namespace CatsControls
         /// The current threshold/>
         /// </summary>
         /// <value><see cref="int"/> The value</value>
-        public int Threshold { get => _threshold; }
+        public int Threshold => _threshold; 
 
         /// <summary>
         /// Calculation resolution property. 
@@ -75,6 +80,12 @@ namespace CatsControls
                 NotifyPropertyChanged();
             }
         }
+
+        /// <summary>
+        /// Dictionnary of calculation parameters
+        /// </summary>
+        /// <remarks>Read only dictionnary</remarks>
+        public IReadOnlyDictionary<string, PointsSetParameter> Parameters => _parameters; 
         #endregion
 
         #region Events

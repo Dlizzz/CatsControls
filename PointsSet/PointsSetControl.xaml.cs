@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.ComponentModel;
 using System.Collections.Generic;
 using Windows.Foundation;
@@ -7,8 +8,6 @@ using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Input;
 using Windows.UI.Core;
-using Windows.ApplicationModel;
-using Windows.ApplicationModel.Resources;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.Storage.Provider;
@@ -17,8 +16,13 @@ using Microsoft.Graphics.Canvas.UI;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using CatsHelpers.ColorMaps;
 
-namespace CatsControls
+namespace CatsControls.PointsSet
 {
+    public class PointsSetRenderedEventArgs: EventArgs
+    {
+        public double FramesPerSecond { get; set; }
+    }
+
     public sealed partial class PointsSetControl : UserControl
     {
         #region UserControl Initialization
@@ -32,7 +36,7 @@ namespace CatsControls
         private readonly ContentDialog saveFileDialog;
 
         // Calculation
-        private IPointsSet _worker;
+        private IPointsSetWorker _worker;
         // Colormap
         private ColorMap _colorMap;
 
@@ -45,6 +49,9 @@ namespace CatsControls
 
             // Initialiaze render pipeline
             renderPipeline = new RenderPipeline(Canvas);
+            // Hook to rendering events
+            renderPipeline.StartRendering += RenderPipeline_StartRendering; ;
+            renderPipeline.Rendered += RenderPipeline_Rendered;
 
             // Saved image file picker
             saveImagePicker = new FileSavePicker
@@ -121,12 +128,12 @@ namespace CatsControls
         [Description("Calculation resolution from 0 (minimum resolution) to 100 (maximum resolution).")]
         public double Resolution
         {
-            get { return (double)GetValue(ResolutionProperty); }
+            get { return Convert.ToDouble(GetValue(ResolutionProperty)); }
             set { SetValue(ResolutionProperty, value); }
         }
         #endregion
 
-        #region Write only properties
+        #region Colormap write only property
         public void SetColorMap(ColorMap colorMap)
         {
             _colorMap = colorMap ?? throw new ArgumentNullException(nameof(colorMap));
@@ -137,24 +144,33 @@ namespace CatsControls
             renderPipeline.ColorMap = _colorMap;
         }
 
-        public void SetWorker(IPointsSet pointsSet)
+        private void ColorMapPropertiesChangedEventHandler(object sender, PropertyChangedEventArgs args)
+        {
+            if (args.PropertyName == "Inversed") renderPipeline.ColorMap = _colorMap;
+        }
+        #endregion
+
+        #region Worker write only property
+        public void SetWorker(IPointsSetWorker pointsSet)
         {
             _worker = pointsSet ?? throw new ArgumentNullException(nameof(pointsSet));
 
             // Hook to Worker Resolution property changed event
-            ((PointsSet)_worker).PropertyChanged += WorkerPropertiesChangedEventHandler;
+            ((PointsSetWorker)_worker).PropertyChanged += WorkerPropertiesChangedEventHandler;
+
+            // Hook to each worker parameter property chnaged event
+            foreach (KeyValuePair<string, PointsSetParameter> parameter in ((PointsSetWorker)_worker).Parameters)
+            {
+                parameter.Value.PropertyChanged += WorkerPropertiesChangedEventHandler;
+            }
 
             renderPipeline.Worker = _worker;
         }
+
+        private void WorkerPropertiesChangedEventHandler(object sender, PropertyChangedEventArgs args) => renderPipeline.Worker = _worker;
         #endregion
 
-        #region UserControl Events
-        [Browsable(true)] [Category("Action")]
-        [Description("Invoked when PointsSet is ready to draw.")]
-        public event TypedEventHandler<CanvasControl, CanvasCreateResourcesEventArgs> CreateResources;
-        #endregion
-
-        #region UserControl Methods
+        #region Control Methods
         public async void SaveImageFileAsync()
         {
             StorageFile file = await saveImagePicker.PickSaveFileAsync();
@@ -204,29 +220,57 @@ namespace CatsControls
             }
         }
 
-        public PointValues GetValues(Point point) => renderPipeline.GetValues(point);
-
-        #endregion
-
-        #region Worker Events
-        public void WorkerPropertiesChangedEventHandler(object sender, PropertyChangedEventArgs args)
+        public PointValues GetValues(Point point)
         {
-            if (args.PropertyName == "Resolution") renderPipeline.Worker = _worker;
+            PointValues values = renderPipeline.GetValues(point);
+
+            values.PointValue /= _worker.Threshold;
+
+            return values;
+        }
+
+        public void Reset()
+        {
+            renderPipeline.IsEnabled = false;
+            Origin = new Point(PointsSet.ActualWidth / 2, PointsSet.ActualHeight / 2);
+            ScaleFactor = 0.005;
+            Resolution = 0;
+            renderPipeline.IsEnabled = true;
         }
 
         #endregion
 
-        #region Colormap Events
-        public void ColorMapPropertiesChangedEventHandler(object sender, PropertyChangedEventArgs args)
-        {
-            if (args.PropertyName == "Inversed") renderPipeline.ColorMap = _colorMap;
-        }
+        #region Control Events
+        [Browsable(true)] [Category("Action")]
+        [Description("Invoked when PointsSet is ready to draw.")]
+        // OnCreateResource method is provided by the Canvas. We propagate its event to the control  
+        public event TypedEventHandler<CanvasControl, CanvasCreateResourcesEventArgs> CreateResources;
+
+        [Browsable(true)]
+        [Category("Action")]
+        [Description("Invoked when PointsSet start rendering.")]
+        // Raised by RenderPipeline
+        public event EventHandler StartRendering;
+
+        [Browsable(true)]
+        [Category("Action")]
+        [Description("Invoked when PointsSet is rendered.")]
+        // Raised by RenderPipeline
+        public event EventHandler<RenderEventArgs> Rendered;
+        #endregion
+
+        #region Pipeline Events
+        // Propagate the pipeline events at control level
+        private void RenderPipeline_StartRendering(object sender, EventArgs e) => StartRendering?.Invoke(this, e);
+        private void RenderPipeline_Rendered(object sender, RenderEventArgs e) => Rendered?.Invoke(this, e);
         #endregion
 
         #region Canvas Events
         private void Canvas_CreateResources(CanvasControl sender, CanvasCreateResourcesEventArgs args)
         {
-            if (args.Reason == CanvasCreateResourcesReason.FirstTime) renderPipeline.Origin = new Point(sender.ActualWidth / 2, sender.ActualHeight / 2);
+            if (args.Reason == CanvasCreateResourcesReason.FirstTime) Origin = new Point(sender.ActualWidth / 2, sender.ActualHeight / 2);
+            
+            // Propagate event to control's event.
             CreateResources?.Invoke(sender, args);
         }
 
@@ -238,16 +282,12 @@ namespace CatsControls
             double width = ((CanvasControl)sender).ActualWidth;
             double height = ((CanvasControl)sender).ActualHeight;
 
-            renderPipeline.Origin = new Point(
-                renderPipeline.Origin.X + width / 2 - clickedPoint.X,
-                renderPipeline.Origin.Y + height / 2 - clickedPoint.Y);
+            Origin = new Point(Origin.X + width / 2 - clickedPoint.X, Origin.Y + height / 2 - clickedPoint.Y);
         }
 
         private void Canvas_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs args)
         {
-            renderPipeline.Origin = new Point(
-                renderPipeline.Origin.X + args.Delta.Translation.X,
-                renderPipeline.Origin.Y + args.Delta.Translation.Y);
+            Origin = new Point(Origin.X + args.Delta.Translation.X, Origin.Y + args.Delta.Translation.Y);
         }
 
         private void Canvas_PointerWheelChanged(object sender, PointerRoutedEventArgs args)
@@ -259,12 +299,15 @@ namespace CatsControls
             for (int i = 2; i <= magnifierPower; i++) magnifier *= magnifier;
 
             // Transalte the origin to have the complex at the center of the canevas staying at the center
-            double newScale = renderPipeline.Scale * magnifier;
+            double newScale = ScaleFactor * magnifier;
             Point newOrigin = new Point(
-                (newScale - renderPipeline.Scale) / newScale * pointerPoint.Position.X + renderPipeline.Scale / newScale * renderPipeline.Origin.X,
-                (newScale - renderPipeline.Scale) / newScale * pointerPoint.Position.Y + renderPipeline.Scale / newScale * renderPipeline.Origin.Y);
-            
-            renderPipeline.Geometry = (newOrigin, newScale);
+                (newScale - ScaleFactor) / newScale * pointerPoint.Position.X + ScaleFactor / newScale * Origin.X,
+                (newScale - ScaleFactor) / newScale * pointerPoint.Position.Y + ScaleFactor / newScale * Origin.Y);
+
+            renderPipeline.IsEnabled = false;
+            Origin = newOrigin;
+            ScaleFactor = newScale;
+            renderPipeline.IsEnabled = true;
         }
         #endregion
     }

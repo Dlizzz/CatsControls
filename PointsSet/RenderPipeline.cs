@@ -11,7 +11,7 @@ using Microsoft.Graphics.Canvas.UI;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using CatsHelpers.ColorMaps;
 
-namespace CatsControls
+namespace CatsControls.PointsSet
 {
     /// <summary>
     /// Structure used to get values from the current set of points
@@ -22,14 +22,18 @@ namespace CatsControls
         public double PointReal;
         public double PointImaginary;
         // Calculated value for the point
-        public int PointValue;
-        // Execution time of the last pipeline run
-        public TimeSpan ExecutionTime;
+        public double PointValue;
+    }
+
+    public class RenderEventArgs : EventArgs
+    {
+        public double FramesPerSecond { get; set; }
     }
 
     class RenderPipeline : IDisposable
     {
         #region Initialization
+       
         private const int BYTES_PER_PIXEL = 4;
         private static readonly ResourceLoader resourceLoader = ResourceLoader.GetForCurrentView("CatsControls/ErrorMessages");
 
@@ -41,7 +45,7 @@ namespace CatsControls
         private int[] renderValues;
 
         // Calculation
-        private IPointsSet _worker;
+        private IPointsSetWorker _worker;
 
         // Colormap
         private ColorMap _colorMap;
@@ -59,9 +63,17 @@ namespace CatsControls
         // Counters
         private readonly Stopwatch pipelineWatch;
 
+        // Events
+        private readonly RenderEventArgs renderedEventArgs;
+
+        // Process
+        private enum PipelineTrigger { Geometry, Transformation, ColorMap, Calculation, All };
+        private bool _isEnabled = true;
+
         public RenderPipeline(CanvasControl canvas)
         {
             _canvas = canvas;
+            renderedEventArgs = new RenderEventArgs();
 
             // Watch for execution time counter
             pipelineWatch = new Stopwatch();
@@ -72,19 +84,13 @@ namespace CatsControls
         #endregion
 
         #region Pipeline properties
-        public IPointsSet Worker
+        public IPointsSetWorker Worker
         {
             get => _worker;
             set
             {
                 _worker = value ?? throw new ArgumentNullException(nameof(Worker));
-
-                // Updated calculation pipeline
-                pipelineWatch.Restart();
-                AllocateColorMap();
-                Calculate();
-                Render();
-                pipelineWatch.Stop();
+                RunPipeline(PipelineTrigger.Calculation);
             }
         }
 
@@ -94,12 +100,7 @@ namespace CatsControls
             set
             {
                 _colorMap = value ?? throw new ArgumentNullException(nameof(ColorMap));
-
-                // Updated colormap pipeline
-                pipelineWatch.Restart();
-                AllocateColorMap();
-                Render();
-                pipelineWatch.Stop();
+                RunPipeline(PipelineTrigger.ColorMap);
             }
         }
 
@@ -109,12 +110,7 @@ namespace CatsControls
             set
             {
                 _origin = value;
-
-                // Updated transform pipeline
-                pipelineWatch.Restart();
-                Calculate();
-                Render();
-                pipelineWatch.Stop();
+                RunPipeline(PipelineTrigger.Transformation);
             }
         }
 
@@ -126,30 +122,7 @@ namespace CatsControls
                 if (value == 0) throw new ArgumentOutOfRangeException(nameof(Scale), resourceLoader.GetString("ValueNotZero"));
 
                 _scale = value;
-
-                // Updated transform pipeline
-                pipelineWatch.Restart();
-                Calculate();
-                Render();
-                pipelineWatch.Stop();
-            }
-        }
-
-        public (Point origin, double scale) Geometry
-        {
-            get => (_origin, _scale);
-            set
-            {
-                if (value.scale == 0) throw new ArgumentOutOfRangeException(nameof(Scale), resourceLoader.GetString("ValueNotZero"));
-
-                _scale = value.scale;
-                _origin = value.origin;
-
-                // Updated transform pipeline
-                pipelineWatch.Restart();
-                Calculate();
-                Render();
-                pipelineWatch.Stop();
+                RunPipeline(PipelineTrigger.Transformation);
             }
         }
 
@@ -163,13 +136,17 @@ namespace CatsControls
                 width = _canvas.ActualSize.ToSize().Width;
                 height = _canvas.ActualSize.ToSize().Height;
                 pointsCount = Convert.ToInt32(width * height);
+                RunPipeline(PipelineTrigger.Geometry);
+            }
+        }
 
-                // Updated geometry pipeline
-                pipelineWatch.Restart();
-                AllocateRenderTarget();
-                Calculate();
-                Render();
-                pipelineWatch.Stop();
+        public bool IsEnabled
+        {
+            get => _isEnabled;
+            set
+            {
+                _isEnabled = value;
+                if (_isEnabled) RunPipeline(PipelineTrigger.All);
             }
         }
         #endregion
@@ -180,9 +157,8 @@ namespace CatsControls
             PointValues values = new PointValues();
 
             (values.PointReal, values.PointImaginary) = ToComplex(point.X, point.Y);
+            
             values.PointValue = renderValues[ToIndex(point)];
-            // Get the elapsed time of the last pipeline run as a TimeSpan value
-            values.ExecutionTime = pipelineWatch.Elapsed;            
 
             return values;
         }
@@ -191,6 +167,12 @@ namespace CatsControls
         {
             await renderTarget.SaveAsync(stream, fileFormat);
         }
+        #endregion
+
+        #region Pipeline events
+        public event EventHandler StartRendering;
+
+        public event EventHandler<RenderEventArgs> Rendered;
         #endregion
 
         #region Canvas events handlers
@@ -222,6 +204,45 @@ namespace CatsControls
         #endregion
 
         #region Pipeline processes
+        private void RunPipeline(PipelineTrigger trigger)
+        {
+            if (!_isEnabled) return;
+
+            StartRendering?.Invoke(this, EventArgs.Empty);
+            pipelineWatch.Restart();
+
+            switch (trigger)
+            {
+                case PipelineTrigger.Geometry:
+                    AllocateRenderTarget();
+                    Calculate();
+                    break;
+                case PipelineTrigger.Transformation:
+                    Calculate();
+                    break;
+                case PipelineTrigger.ColorMap:
+                    AllocateColorMap();
+                    break;
+                case PipelineTrigger.Calculation:
+                    AllocateColorMap();
+                    Calculate();
+                    break;
+                case PipelineTrigger.All:
+                    AllocateRenderTarget();
+                    AllocateColorMap();
+                    Calculate();
+                    break;
+            }
+            Render();
+
+            pipelineWatch.Stop();
+            if (Rendered != null)
+            {
+                renderedEventArgs.FramesPerSecond = 1 / pipelineWatch.Elapsed.TotalSeconds;
+                Rendered.Invoke(this, renderedEventArgs);
+            }
+        }
+
         private void AllocateRenderTarget()
         {
             // Make sure that we have a device attached to the Canvas
@@ -254,7 +275,7 @@ namespace CatsControls
             Parallel.For(0, pointsCount, (index) =>
                 {
                     var (ca, cb) = ToComplex(index);
-                    renderValues[index] = _worker.PointSetWorker(ca, cb);
+                    renderValues[index] = _worker.PointsSetWorker(ca, cb);
                 }
             );
         }

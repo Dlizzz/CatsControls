@@ -5,15 +5,15 @@ using System.Text;
 using System.Threading.Tasks;
 using Windows.UI.Xaml;
 
-namespace CatsControls
+namespace CatsControls.PointsSet
 {
-    public interface IPointsSet
+    public interface IPointsSetWorker
     {
         public int MinThreshold { get; }
         public int MaxThreshold { get; }
         public int Threshold { get; }
         public double Resolution { get; set; }
 
-        public int PointSetWorker(double ca, double cb);
+        public int PointsSetWorker(double ca, double cb);
     }
 }
