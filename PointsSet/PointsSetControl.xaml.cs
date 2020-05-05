@@ -264,6 +264,12 @@ namespace CatsControls.PointsSet
         [Description("Invoked when PointsSet is rendered.")]
         // Raised by RenderPipeline
         public event EventHandler<RenderEventArgs> Rendered;
+
+        private void PointsSet_Unloaded(object sender, RoutedEventArgs e)
+        {
+            Canvas.RemoveFromVisualTree();
+            Canvas = null;
+        }
         #endregion
 
         #region Pipeline Events
@@ -317,5 +323,6 @@ namespace CatsControls.PointsSet
             renderPipeline.IsEnabled = true;
         }
         #endregion
+
     }
 }

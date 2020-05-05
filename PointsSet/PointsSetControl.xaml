@@ -8,6 +8,7 @@
     x:Name="PointsSet"
     d:DesignHeight="450"
     d:DesignWidth="800"
+    Unloaded="PointsSet_Unloaded"
     mc:Ignorable="d">
 
     <Grid
